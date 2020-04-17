@@ -90,6 +90,12 @@ export class Composite extends Shape {
         this.shapes = shapes;
     }
 
+    addShape(shape) {
+        this.shapes.push(shape);
+        this.x = (this.getX() * this.getArea() + shape.getX() * shape.getArea())/(this.getArea + shape.getArea());
+        this.y = (this.getY() * this.getArea() + shape.getY() * shape.getArea())/(this.getArea + shape.getArea());
+    }
+
     getArea() {
         let totalArea = 0;
         for (let shape of this.shapes) {
