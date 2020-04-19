@@ -2,8 +2,13 @@ export class Shape {
     constructor(x, y) {
         this.x = x;
         this.y = y;
+        this.area = 0;
     }
     
+    getArea() {
+        return this.area;
+    }
+
     getX() {
         return this.x;
     }
@@ -14,14 +19,12 @@ export class Shape {
 }
 
 export class Rectangle extends Shape {
+    
     constructor(x, y, width, height) {
         super(x, y);
         this.width = width;
         this.height = height;
-    }
-
-    getArea() {
-        return this.width*this.height;
+        this.area = width*height;
     }
 
     getIxx() {
@@ -52,11 +55,8 @@ export class Circle extends Shape {
 
     constructor(x, y, radius) {
         super (x, y);
+        this.area = Math.PI*radius*radius;
         this.radius = radius;
-    }
-
-    getArea() {
-        return Math.PI*this.radius*this.radius;
     }
 
     getIxx() {
@@ -75,33 +75,16 @@ export class Circle extends Shape {
 
 export class Composite extends Shape {
     constructor(shapes) {
-        // Read https://en.wikipedia.org/wiki/Centroid
-        let totalArea = 0;
-        let totalWeightedCentroidsX = 0;
-        let totalWeightedCentroidsY = 0;
-        
-        for (let shape of shapes) {
-            const area = shape.getArea();
-            totalWeightedCentroidsX += shape.getX()*area;
-            totalWeightedCentroidsY += shape.getY()*area;
-            totalArea += area;
-        }
-        super(totalWeightedCentroidsX/totalArea, totalWeightedCentroidsY/totalArea); // Bad practise? TODO
-        this.shapes = shapes;
+        super(0, 0);
+        this.shapes = [];
+        shapes.forEach(shape => {this.addShape(shape)});
     }
 
     addShape(shape) {
+        this.x = (this.getX() * this.getArea() + shape.getX() * shape.getArea())/(this.getArea() + shape.getArea());
+        this.y = (this.getY() * this.getArea() + shape.getY() * shape.getArea())/(this.getArea() + shape.getArea());
         this.shapes.push(shape);
-        this.x = (this.getX() * this.getArea() + shape.getX() * shape.getArea())/(this.getArea + shape.getArea());
-        this.y = (this.getY() * this.getArea() + shape.getY() * shape.getArea())/(this.getArea + shape.getArea());
-    }
-
-    getArea() {
-        let totalArea = 0;
-        for (let shape of this.shapes) {
-            totalArea += shape.getArea();
-        }
-        return totalArea;
+        this.area += shape.getArea();
     }
 
     getIxx() {
@@ -109,15 +92,16 @@ export class Composite extends Shape {
         // Uses parallel axis theorem
         let ixx = 0;
         for (let shape of this.shapes) {
-            ixx += shape.getIxx() + shape.getArea()*(shape.getY()-this.getY())
+            ixx += shape.getIxx() + shape.getArea()*((shape.getY()-this.getY())*(shape.getY()-this.getY()))
         }
         return ixx;
     }
 
+    // TODO Make take x,y about
     getIyy() {
         let iyy = 0;
         for (let shape of this.shapes) {
-            iyy += shape.getIyy() + shape.getArea()*(shape.getX()-this.getX())
+            iyy += shape.getIyy() + shape.getArea()*((shape.getX()-this.getX())*(shape.getX()-this.getX()))
         }
         return iyy;
     }
@@ -163,19 +147,27 @@ export class IBeam extends Composite {
     // h - height
     // wBot - Bottom flange width
     // wTop - Top flange width
-    constructor(b, t, h, wBot, wTop = wBot) {
-        
+//  constructor(b, t, h, wBot, wTop = wBot) {
+    constructor({
+        topFlangeThickness, 
+        botFlangeThickness = topFlangeThickness,
+        webThickness,
+        topFlangeWidth,
+        botFlangeWidth = topFlangeWidth,
+        height
+    }) {
+
         // The thickness is the larger flange width
-        const w = wBot > wTop ? wBot : wTop;
+        const w = topFlangeWidth > botFlangeWidth ? topFlangeWidth : botFlangeWidth;
 
         const shapes = [];
 
         // Top flange
-        shapes.push(new Rectangle(w/2, t/2, wTop, t));
+        shapes.push(new Rectangle(w/2, botFlangeThickness/2, botFlangeWidth, botFlangeThickness));
         // Web
-        shapes.push(new Rectangle(w/2, h/2, b, h - 2*t));
+        shapes.push(new Rectangle(w/2, height/2, webThickness, height - (botFlangeThickness + topFlangeThickness)));
         // Bottom flange
-        shapes.push(new Rectangle(w/2, h - t/2, wBot, t));
+        shapes.push(new Rectangle(w/2, height - topFlangeThickness/2, topFlangeWidth, topFlangeThickness));
 
         super(shapes);
     }
