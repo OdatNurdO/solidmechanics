@@ -1,5 +1,5 @@
 import {Rectangle, Circle, Composite, IBeam, ZBeam} from './shape.js';
-import {Beam, Force, DOWN, UP, LEFT, RIGHT} from './beam.js';
+import {Beam, Force, DOWN, UP, LEFT, RIGHT, FixedSupport} from './beam.js';
 var nerdamer = require('nerdamer/all');
 nerdamer.set('SOLUTIONS_AS_OBJECT', true);
 
@@ -14,13 +14,13 @@ const iBeam = new IBeam({
     height: 300 + 38 + 38
 });
 
-const L = 10;
-const beam = new Beam(L, iBeam, 0);
-beam.applyAction(new Force(0, 0, 10, DOWN));
-beam.applyAction(new Force(10, 0, 10, DOWN));
+const beam = new Beam(5, iBeam, 0);
+beam.applyAction(new FixedSupport(0, 0, 'Fx', 'Fy', 'M'));
+beam.applyAction(new Force(5, 0, 10, DOWN));
 console.log("X: " + nerdamer(beam.sumX()));
 console.log("Y: " + nerdamer(beam.sumY()));
-console.log("M: " + nerdamer(beam.sumMoments(0)));
+console.log("M: " + nerdamer(beam.sumMoments(2)));
+console.log(beam.solve());
 
 ctx.translate(0, canvas.height);
 ctx.scale(1, -1);

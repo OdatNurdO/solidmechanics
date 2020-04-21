@@ -1,4 +1,5 @@
 var nerdamer = require('nerdamer/all');
+var _ = require('lodash');
 
 // UP and RIGHT are the positive y and x respectively
 export const UP = 90; 
@@ -21,15 +22,43 @@ export class Beam {
 
     }
 
-    solve () {
-        console.log()
-    }
+    solve() {
+        // Only static cases
+        nerdamer.set('SOLUTIONS_AS_OBJECT', true);
+        const sumX = nerdamer(this.sumX() + "=0");
+        const sumY = nerdamer(this.sumY() + "=0");
+        // Should be optimised to sum moments about a point with force line of action going through it.
+        // Simplifies solving something like ['Fy=0', '-10+Fx=0', '-2*Fx - 30 + M=0] to ['Fy=0', 'Fx-10=0']
+        const sumMoments = nerdamer(this.sumMoments(0) + "=0");
+        //console.log(sumMoments.toString())
+        //console.log(sumX.toString())
+        //console.log(sumY.toString())
 
+        //console.log(this.sumX())
+        //console.log(this.sumY())
+        //console.log(this.sumMoments(0))
+
+        let variables = _.union(sumX.variables(), sumY.variables(), sumMoments.variables());
+        let equations = [sumX.toString(), sumY.toString(), sumMoments.toString()].filter((value) => value != '0=0');
+        //console.log(equations)
+        const sol = nerdamer.solveEquations(equations, variables);
+        const retSols = {};
+        for (let soln in sol) {
+            // Has to be done to actually evaluate them - TODO put in another function
+            retSols[soln] = nerdamer(sol[soln]).evaluate().text('decimals').toString();
+            // console.log(sol[soln] + " -> " + retSols[soln]);
+        }
+        // console.log(retSols)
+        return retSols;
+
+    }
+    
     sumX() {
         let sum = '0';
         this.actions.forEach(action => sum += '+' + action.resolveX());
         return sum;
     }
+
 
     sumY() {
         let sum = '0';
@@ -99,15 +128,58 @@ export class Force extends Action {
 }
 
 // Force applied along some line from startX to endX with distribution function fX
-export class DistributedForce extends Force {
+export class FunctionForce extends Force {
+    
+    constructor(x, y, magnitude, direction, startX, endX, fX) {
+        super(x, y, magnitude, direction);
+        // console.log(this);
+        this.fX = fX;
+        this.startX = startX;
+        this.endX = endX;
+    }
+
+}
+
+export class DistributedForce extends FunctionForce {
     
     constructor(startX, endX, fX, direction) {
         // Calculate x-centroid
-        this.x = nerdamer('defint(' + fX + ',' + startX + ',' + endX + ',x)/defint(' + fX + ',' + startX + ','  + endX + ',' + 'x)');
-        this.y = 0;
-        this.fX = fX;
-        this.magnitude = nerdamer('defint(' + fX + ',' + startX + ',' + endX +',x)');
-        this.direction = direction;
+        let magnitude = nerdamer('defint(' + fX + ',' + startX + ',' + endX +',x)');
+        let x = nerdamer('defint(x*' + fX + ',' + startX + ',' + endX + ',x)/' + magnitude);
+        let y = 0;
+        super(x, y, magnitude, direction, startX, endX, fX);
+    }
+
+}
+
+export class LinearDistributedForce extends FunctionForce {
+    constructor(startX, endX, magnitude, direction) {
+        super(startX + (endX - startX)/2, 0, (endX-startX) * magnitude, direction, startX, endX, magnitude);
+    }
+}
+
+export class TriangleDistributedForce extends FunctionForce {
+
+    constructor(startX, endX, startMagnitude, endMagnitude, direction) {
+
+        let magnitudeSquare = 0;
+        let magnitudeTriangle = (startX - endX) * (startMagnitude - endMagnitude)/2;
+        let xSquare = startX + (endX - startX)/2;
+        let xTriangle = 0;
+        // Centroid of a triangle is 1/3 from larger end
+        if (startMagnitude > endMagnitude) {
+            xTriangle = startX + (1/3)*(endX - startX);
+            magnitudeSquare = endMagnitude * (endX - startX);
+        } else {
+            xTriangle = startX + (2/3)*(endX - startX);
+            magnitudeSquare = startMagnitude * (endX - startX);
+        }
+        
+        let magnitude = magnitudeSquare + magnitudeTriangle;
+        let x = (xTriangle * magnitudeTriangle + xSquare * magnitudeSquare)/(magnitudeTriangle + magnitudeSquare);
+
+        super(x, 0, magnitude, direction, startX, endX, "(" + startMagnitude + "+" + endMagnitude + ")*((" + startMagnitude + "-" + endMagnitude + ")/(" + startX + "-" + endX + "))");
+
     }
 
 }
@@ -116,11 +188,12 @@ export class DistributedForce extends Force {
 export class Moment extends Action {
     constructor(x, y, magnitude) {
         super(x, y);
+        this.magnitude = magnitude;
     }
 
     // Moments dont care about where we are summing.
     resolveMoment(about) {
-        return magnitude;
+        return this.magnitude;
     }
 }
 
@@ -169,8 +242,8 @@ export class PinJointSupport extends Support {
     constructor(x, y, magnitudeX, magnitudeY) {
         super(x, y);
         // 90 degrees is up
-        this.addConstraint(new Force(x, y, magnitudeX, UP));
-        this.addConstraint(new Force(x, y, magnitudeY, RIGHT));
+        this.addConstraint(new Force(x, y, magnitudeX, RIGHT));
+        this.addConstraint(new Force(x, y, magnitudeY, UP));
     }
 }
 
@@ -179,8 +252,8 @@ export class FixedSupport extends Support {
     constructor(x, y, magnitudeX, magnitudeY, moment) {
         super(x, y);
         // 90 degrees is up
-        this.addConstraint(new Force(x, y, magnitudeX, UP));
-        this.addConstraint(new Force(x, y, magnitudeY, RIGHT));
+        this.addConstraint(new Force(x, y, magnitudeX, RIGHT));
+        this.addConstraint(new Force(x, y, magnitudeY, UP));
         this.addConstraint(new Moment(x, y, moment));
     }
 }
